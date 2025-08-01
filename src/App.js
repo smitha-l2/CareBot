@@ -1,12 +1,19 @@
 import React, { useState } from 'react';
+import axios from 'axios';
+import { API_CONFIG, getApiUrl, isValidFileType, isValidFileSize } from './config/api';
 import './index.css';
 
 function App() {
   const [message, setMessage] = useState('');
   const [uploadedFile, setUploadedFile] = useState(null);
+  const [originalFile, setOriginalFile] = useState(null); // Store the original file object
   const [isDragOver, setIsDragOver] = useState(false);
   const [userRole, setUserRole] = useState('patient'); // 'patient', 'admin', 'doctor'
   const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [patientName, setPatientName] = useState('');
+  const [contactNumber, setContactNumber] = useState('');
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadStatus, setUploadStatus] = useState('');
 
   const handleSendMessage = () => {
     if (message.trim()) {
@@ -24,11 +31,24 @@ function App() {
 
   const handleFileUpload = (file) => {
     if (file) {
+      // Validate file type and size
+      if (!isValidFileType(file)) {
+        alert('Unsupported file type. Please upload PDF, JPG, PNG, or DOC files only.');
+        return;
+      }
+      
+      if (!isValidFileSize(file)) {
+        alert(`File too large. Maximum size allowed is ${API_CONFIG.MAX_FILE_SIZE / (1024 * 1024)}MB.`);
+        return;
+      }
+      
+      setOriginalFile(file); // Store the original file object for upload
       setUploadedFile({
         name: file.name,
         size: (file.size / 1024 / 1024).toFixed(2) + ' MB',
         type: file.type
       });
+      setUploadStatus(''); // Clear any previous status
     }
   };
 
@@ -53,6 +73,8 @@ function App() {
 
   const removeUploadedFile = () => {
     setUploadedFile(null);
+    setOriginalFile(null);
+    setUploadStatus('');
   };
 
   // Role-based access control
@@ -70,6 +92,128 @@ function App() {
     setUserRole('patient');
     setIsLoggedIn(false);
     setUploadedFile(null);
+    setOriginalFile(null);
+    setPatientName('');
+    setContactNumber('');
+    setIsUploading(false);
+    setUploadStatus('');
+  };
+
+  const handleSubmitUpload = async () => {
+    if (!originalFile) {
+      alert('Please select a file to upload.');
+      return;
+    }
+    if (!patientName.trim()) {
+      alert('Please enter the patient name.');
+      return;
+    }
+    if (!contactNumber.trim()) {
+      alert('Please enter the contact number.');
+      return;
+    }
+    
+    setIsUploading(true);
+    setUploadStatus('Uploading...');
+    
+    try {
+      // Create FormData object for file upload
+      const formData = new FormData();
+      formData.append('file', originalFile);
+      formData.append('patientName', patientName.trim());
+      formData.append('contactNumber', contactNumber.trim());
+      formData.append('uploadedBy', userRole);
+      formData.append('uploadTimestamp', new Date().toISOString());
+      
+      // Configure API endpoint using configuration
+      const uploadUrl = getApiUrl(API_CONFIG.ENDPOINTS.UPLOAD_DOCUMENT);
+      
+      // Upload request with progress tracking
+      const response = await axios.post(uploadUrl, formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+          // Add authentication headers if needed
+          // 'Authorization': `Bearer ${authToken}`,
+        },
+        onUploadProgress: (progressEvent) => {
+          const percentCompleted = Math.round(
+            (progressEvent.loaded * 100) / progressEvent.total
+          );
+          setUploadStatus(`Uploading... ${percentCompleted}%`);
+        },
+        timeout: API_CONFIG.TIMEOUT,
+      });
+      
+      // Handle successful upload
+      if (response.status === 200 || response.status === 201) {
+        setUploadStatus('Upload successful!');
+        console.log('Upload successful:', response.data);
+        
+        // Show success message with response data
+        const uploadId = response.data.uploadId || 'N/A';
+        alert(`Document uploaded successfully!\n\nPatient: ${patientName}\nUpload ID: ${uploadId}\nStatus: Completed`);
+        
+        // Reset form after successful upload
+        setTimeout(() => {
+          setUploadedFile(null);
+          setOriginalFile(null);
+          setPatientName('');
+          setContactNumber('');
+          setUploadStatus('');
+        }, 2000);
+      }
+      
+    } catch (error) {
+      console.error('Upload error:', error);
+      
+      // Handle different types of errors
+      let errorMessage = 'Upload failed. Please try again.';
+      
+      if (error.response) {
+        // Server responded with error status
+        const status = error.response.status;
+        const data = error.response.data;
+        
+        switch (status) {
+          case 400:
+            errorMessage = data.message || 'Invalid file or patient data.';
+            break;
+          case 401:
+            errorMessage = 'Authentication required. Please log in again.';
+            break;
+          case 403:
+            errorMessage = 'Access denied. Insufficient permissions.';
+            break;
+          case 413:
+            errorMessage = 'File too large. Please choose a smaller file.';
+            break;
+          case 415:
+            errorMessage = 'Unsupported file type. Please use PDF, JPG, PNG, or DOC files.';
+            break;
+          case 500:
+            errorMessage = 'Server error. Please try again later.';
+            break;
+          default:
+            errorMessage = data.message || `Upload failed (Error ${status}).`;
+        }
+      } else if (error.request) {
+        // Network error - no response from server
+        errorMessage = 'Network error. Please check your connection and try again.';
+      } else if (error.code === 'ECONNABORTED') {
+        // Timeout error
+        errorMessage = 'Upload timeout. Please try again with a smaller file.';
+      }
+      
+      setUploadStatus('Upload failed');
+      alert(errorMessage);
+      
+      // Reset upload status after delay
+      setTimeout(() => {
+        setUploadStatus('');
+      }, 3000);
+    } finally {
+      setIsUploading(false);
+    }
   };
 
   const quickActions = [
@@ -194,56 +338,117 @@ function App() {
               📎 Upload Documents
               <span className="admin-only-badge">Admin Only</span>
             </h2>
-            <div 
-              className={`upload-container ${isDragOver ? 'dragover' : ''}`}
-              onDrop={handleDrop}
-              onDragOver={handleDragOver}
-              onDragLeave={handleDragLeave}
-              onClick={() => document.getElementById('file-input').click()}
-            >
-              <div className="upload-icon">📄</div>
-              <div className="upload-text">
-                {uploadedFile ? 'File uploaded successfully!' : 'Upload medical documents, lab results, or images'}
+            
+            {/* Patient Information Fields */}
+            <div className="patient-info-section">
+              <h3 className="subsection-title">Patient Information</h3>
+              <div className="patient-info-fields">
+                <div className="input-group">
+                  <label htmlFor="patient-name" className="input-label">
+                    Patient Name *
+                  </label>
+                  <input
+                    id="patient-name"
+                    type="text"
+                    className="patient-input"
+                    placeholder="Enter patient's full name"
+                    value={patientName}
+                    onChange={(e) => setPatientName(e.target.value)}
+                    required
+                  />
+                </div>
+                <div className="input-group">
+                  <label htmlFor="contact-number" className="input-label">
+                    Contact Number *
+                  </label>
+                  <input
+                    id="contact-number"
+                    type="tel"
+                    className="patient-input"
+                    placeholder="Enter contact number"
+                    value={contactNumber}
+                    onChange={(e) => setContactNumber(e.target.value)}
+                    required
+                  />
+                </div>
               </div>
-              <div className="upload-subtext">
-                Drag & drop files here or click to browse
-                <br />
-                <small>Supported: PDF, JPG, PNG, DOC (Max 10MB)</small>
+            </div>
+
+            {/* File Upload Section */}
+            <div className="file-upload-section">
+              <h3 className="subsection-title">Document Upload</h3>
+              <div 
+                className={`upload-container ${isDragOver ? 'dragover' : ''}`}
+                onDrop={handleDrop}
+                onDragOver={handleDragOver}
+                onDragLeave={handleDragLeave}
+                onClick={() => document.getElementById('file-input').click()}
+              >
+                <div className="upload-icon">📄</div>
+                <div className="upload-text">
+                  {uploadedFile ? 'File uploaded successfully!' : 'Upload medical documents, lab results, or images'}
+                </div>
+                <div className="upload-subtext">
+                  Drag & drop files here or click to browse
+                  <br />
+                  <small>Supported: PDF, JPG, PNG, DOC (Max 10MB)</small>
+                </div>
+                <input
+                  id="file-input"
+                  type="file"
+                  className="file-input"
+                  accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
+                  onChange={(e) => handleFileUpload(e.target.files[0])}
+                />
+                {!uploadedFile && (
+                  <button 
+                    className="upload-button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      document.getElementById('file-input').click();
+                    }}
+                  >
+                    Choose File
+                  </button>
+                )}
               </div>
-              <input
-                id="file-input"
-                type="file"
-                className="file-input"
-                accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
-                onChange={(e) => handleFileUpload(e.target.files[0])}
-              />
-              {!uploadedFile && (
-                <button 
-                  className="upload-button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    document.getElementById('file-input').click();
-                  }}
-                >
-                  Choose File
-                </button>
+
+              {uploadedFile && (
+                <div className="uploaded-file">
+                  <div className="file-info">
+                    <span>📎</span>
+                    <div>
+                      <div className="file-name">{uploadedFile.name}</div>
+                      <div className="file-size">{uploadedFile.size}</div>
+                    </div>
+                  </div>
+                  <button className="remove-file" onClick={removeUploadedFile}>
+                    ✕
+                  </button>
+                </div>
               )}
             </div>
 
-            {uploadedFile && (
-              <div className="uploaded-file">
-                <div className="file-info">
-                  <span>📎</span>
-                  <div>
-                    <div className="file-name">{uploadedFile.name}</div>
-                    <div className="file-size">{uploadedFile.size}</div>
-                  </div>
+            {/* Submit Button */}
+            <div className="submit-section">
+              {uploadStatus && (
+                <div className={`upload-status ${uploadStatus.includes('successful') ? 'success' : uploadStatus.includes('failed') ? 'error' : 'progress'}`}>
+                  {uploadStatus}
                 </div>
-                <button className="remove-file" onClick={removeUploadedFile}>
-                  ✕
-                </button>
-              </div>
-            )}
+              )}
+              <button 
+                className="submit-upload-btn"
+                onClick={handleSubmitUpload}
+                disabled={!uploadedFile || !patientName.trim() || !contactNumber.trim() || isUploading}
+              >
+                {isUploading ? 'Uploading...' : 'Submit Upload'}
+              </button>
+              <p className="submit-note">
+                * All fields are required. Please ensure patient information is accurate.
+                <br />
+                <small>📡 Documents will be uploaded to the secure server with patient information as payload.</small>
+              </p>
+            </div>
           </div>
         )}
 
