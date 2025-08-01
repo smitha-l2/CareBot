@@ -242,4 +242,137 @@ public class SimplifiedFileUploadController {
         System.out.println("🔍 Debug storage info requested");
         return ResponseEntity.ok(debug);
     }
+
+    // Patient CRUD Operations
+    @PutMapping("/patients/{patientId}")
+    public ResponseEntity<Map<String, Object>> updatePatient(
+            @PathVariable String patientId,
+            @RequestParam("patientName") String patientName,
+            @RequestParam("contactNumber") String contactNumber,
+            @RequestParam("dateOfBirth") String dateOfBirth,
+            @RequestParam("updatedBy") String updatedBy) {
+        
+        try {
+            Long id = Long.parseLong(patientId);
+            Map<String, Object> patient = patients.get(id);
+            
+            if (patient == null) {
+                Map<String, Object> errorResponse = new HashMap<>();
+                errorResponse.put("error", "Patient not found");
+                errorResponse.put("patientId", patientId);
+                return ResponseEntity.status(HttpStatus.NOT_FOUND).body(errorResponse);
+            }
+            
+            // Update patient information
+            patient.put("patientName", patientName);
+            patient.put("contactNumber", contactNumber);
+            patient.put("dateOfBirth", dateOfBirth);
+            patient.put("updatedBy", updatedBy);
+            patient.put("updatedAt", java.time.LocalDateTime.now().toString());
+            
+            patients.put(id, patient);
+            
+            System.out.println("✏️ Patient " + id + " updated: " + patientName);
+            
+            Map<String, Object> response = new HashMap<>();
+            response.put("status", "success");
+            response.put("message", "Patient updated successfully");
+            response.put("patient", patient);
+            
+            return ResponseEntity.ok(response);
+            
+        } catch (NumberFormatException e) {
+            Map<String, Object> errorResponse = new HashMap<>();
+            errorResponse.put("error", "Invalid patient ID format");
+            errorResponse.put("patientId", patientId);
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(errorResponse);
+        } catch (Exception e) {
+            System.err.println("❌ Error updating patient: " + e.getMessage());
+            Map<String, Object> errorResponse = new HashMap<>();
+            errorResponse.put("error", "Failed to update patient: " + e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(errorResponse);
+        }
+    }
+
+    @DeleteMapping("/patients/{patientId}")
+    public ResponseEntity<Map<String, Object>> deletePatient(@PathVariable String patientId) {
+        try {
+            Long id = Long.parseLong(patientId);
+            Map<String, Object> patient = patients.get(id);
+            
+            if (patient == null) {
+                Map<String, Object> errorResponse = new HashMap<>();
+                errorResponse.put("error", "Patient not found");
+                errorResponse.put("patientId", patientId);
+                return ResponseEntity.status(HttpStatus.NOT_FOUND).body(errorResponse);
+            }
+            
+            // Remove patient
+            patients.remove(id);
+            
+            // Remove all documents associated with this patient
+            documents.entrySet().removeIf(entry -> {
+                Map<String, Object> doc = entry.getValue();
+                return id.equals(doc.get("patientId"));
+            });
+            
+            System.out.println("🗑️ Patient " + id + " and associated documents deleted");
+            
+            Map<String, Object> response = new HashMap<>();
+            response.put("status", "success");
+            response.put("message", "Patient and associated documents deleted successfully");
+            response.put("deletedPatient", patient);
+            
+            return ResponseEntity.ok(response);
+            
+        } catch (NumberFormatException e) {
+            Map<String, Object> errorResponse = new HashMap<>();
+            errorResponse.put("error", "Invalid patient ID format");
+            errorResponse.put("patientId", patientId);
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(errorResponse);
+        } catch (Exception e) {
+            System.err.println("❌ Error deleting patient: " + e.getMessage());
+            Map<String, Object> errorResponse = new HashMap<>();
+            errorResponse.put("error", "Failed to delete patient: " + e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(errorResponse);
+        }
+    }
+
+    @DeleteMapping("/documents/{documentId}")
+    public ResponseEntity<Map<String, Object>> deleteDocument(@PathVariable String documentId) {
+        try {
+            Long id = Long.parseLong(documentId);
+            Map<String, Object> document = documents.get(id);
+            
+            if (document == null) {
+                Map<String, Object> errorResponse = new HashMap<>();
+                errorResponse.put("error", "Document not found");
+                errorResponse.put("documentId", documentId);
+                return ResponseEntity.status(HttpStatus.NOT_FOUND).body(errorResponse);
+            }
+            
+            // Remove document
+            documents.remove(id);
+            
+            System.out.println("🗑️ Document " + id + " deleted");
+            
+            Map<String, Object> response = new HashMap<>();
+            response.put("status", "success");
+            response.put("message", "Document deleted successfully");
+            response.put("deletedDocument", document);
+            
+            return ResponseEntity.ok(response);
+            
+        } catch (NumberFormatException e) {
+            Map<String, Object> errorResponse = new HashMap<>();
+            errorResponse.put("error", "Invalid document ID format");
+            errorResponse.put("documentId", documentId);
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(errorResponse);
+        } catch (Exception e) {
+            System.err.println("❌ Error deleting document: " + e.getMessage());
+            Map<String, Object> errorResponse = new HashMap<>();
+            errorResponse.put("error", "Failed to delete document: " + e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(errorResponse);
+        }
+    }
 }
