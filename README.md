@@ -1,9 +1,15 @@
-# Carebot Frontend
+# Carebot Healthcare System with WhatsApp Integration
 
-A modern React-based frontend interface for the Carebot healthcare assistant system.
+A comprehensive healthcare management system with automatic WhatsApp notifications for patients.
 
 ## Features
 
+- 📋 **Patient Management Dashboard**: Comprehensive patient data management
+- 📄 **Document Upload and Storage**: Upload prescriptions and medical documents
+- 📱 **Automatic WhatsApp Notifications**: Send notifications via Twilio WhatsApp API
+- 🆓 **Free WhatsApp Integration**: Generate WhatsApp URLs without external accounts
+- 🔐 **Secure Patient Data Handling**: In-memory storage with H2 database support
+- 🌐 **React Frontend with Spring Boot Backend**: Modern full-stack architecture
 - **Chat Interface**: Interactive chat with the Carebot AI assistant
 - **File Upload**: Upload medical documents, lab results, and images with drag-and-drop support
 - **Quick Actions**: Pre-defined health-related action buttons for common queries
@@ -15,10 +21,49 @@ A modern React-based frontend interface for the Carebot healthcare assistant sys
 
 ### Prerequisites
 
+- Java 17 or higher
 - Node.js (version 14 or higher)
+- Maven 3.6+
 - npm or yarn package manager
 
-### Installation
+### Backend Setup
+
+1. **Clone the repository**
+   ```bash
+   git clone https://github.com/smitha-l2/CareBot.git
+   cd CareBot
+   ```
+
+2. **Configure Application Properties**
+   ```bash
+   cd java-carebot-backend/src/main/resources
+   cp application.properties.template application.properties
+   ```
+
+3. **Set up Twilio WhatsApp (Optional)**
+   
+   For automatic WhatsApp messaging, get credentials from [Twilio Console](https://console.twilio.com/):
+   
+   Edit `application.properties`:
+   ```properties
+   twilio.account.sid=YOUR_ACTUAL_TWILIO_ACCOUNT_SID
+   twilio.auth.token=YOUR_ACTUAL_TWILIO_AUTH_TOKEN
+   ```
+   
+   Or set environment variables:
+   ```bash
+   export TWILIO_ACCOUNT_SID=your_account_sid
+   export TWILIO_AUTH_TOKEN=your_auth_token
+   ```
+
+4. **Build and Run Backend**
+   ```bash
+   cd java-carebot-backend
+   mvn clean package
+   java -Dspring.profiles.active=simple -jar target/java-carebot-backend-1.0.0.jar
+   ```
+
+### Frontend Setup
 
 1. Navigate to the project directory:
    ```bash

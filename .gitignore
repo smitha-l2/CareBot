@@ -66,3 +66,60 @@ ehthumbs.db
 # Package manager lock files (optional - uncomment to ignore)
 # package-lock.json
 # yarn.lock
+
+# Java specific
+*.class
+*.jar
+*.war
+*.ear
+*.zip
+*.tar.gz
+*.rar
+*.iml
+
+# Maven
+target/
+pom.xml.tag
+pom.xml.releaseBackup
+pom.xml.versionsBackup
+pom.xml.next
+release.properties
+
+# Gradle
+.gradle
+build/
+
+# Spring Boot
+application-*.properties
+application-*.yml
+application-*.yaml
+
+# Sensitive configuration files containing credentials
+**/src/main/resources/application-prod.properties
+**/src/main/resources/application-dev.properties
+**/src/main/resources/application-local.properties
+
+# Log files
+*.log
+logs/
+
+# Database files
+*.db
+*.sqlite
+/data/
+
+# Uploads directory
+uploads/
+
+# IDE files
+.metadata
+.recommenders
+.settings/
+.project
+.classpath
+bin/
+
+# Twilio credentials and other secrets
+twilio.properties
+secrets.properties
+credentials.properties
