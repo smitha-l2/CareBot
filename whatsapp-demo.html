@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Carebot - Free WhatsApp Integration Demo</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+            overflow: hidden;
+        }
+        
+        .header {
+            background: linear-gradient(45deg, #25D366, #128C7E);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+        
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+        
+        .header p {
+            font-size: 1.2em;
+            opacity: 0.9;
+        }
+        
+        .form-container {
+            padding: 40px;
+        }
+        
+        .form-group {
+            margin-bottom: 25px;
+        }
+        
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #333;
+            font-size: 1.1em;
+        }
+        
+        .form-group input {
+            width: 100%;
+            padding: 15px;
+            border: 2px solid #e1e5e9;
+            border-radius: 8px;
+            font-size: 1em;
+            transition: border-color 0.3s ease;
+        }
+        
+        .form-group input:focus {
+            outline: none;
+            border-color: #25D366;
+            box-shadow: 0 0 0 3px rgba(37, 211, 102, 0.1);
+        }
+        
+        .submit-btn {
+            width: 100%;
+            background: linear-gradient(45deg, #25D366, #128C7E);
+            color: white;
+            border: none;
+            padding: 18px;
+            font-size: 1.2em;
+            font-weight: 600;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+        
+        .submit-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(37, 211, 102, 0.4);
+        }
+        
+        .submit-btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        .result {
+            margin-top: 30px;
+            padding: 20px;
+            border-radius: 8px;
+            display: none;
+        }
+        
+        .result.success {
+            background: #d4edda;
+            border: 1px solid #c3e6cb;
+            color: #155724;
+        }
+        
+        .result.error {
+            background: #f8d7da;
+            border: 1px solid #f5c6cb;
+            color: #721c24;
+        }
+        
+        .whatsapp-link {
+            display: inline-block;
+            background: #25D366;
+            color: white;
+            padding: 12px 20px;
+            text-decoration: none;
+            border-radius: 6px;
+            margin-top: 15px;
+            font-weight: 600;
+            transition: background 0.3s ease;
+        }
+        
+        .whatsapp-link:hover {
+            background: #128C7E;
+        }
+        
+        .status {
+            text-align: center;
+            padding: 20px;
+            background: #f8f9fa;
+            border-top: 1px solid #e9ecef;
+        }
+        
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 20px;
+        }
+        
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #25D366;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 15px;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🤖 Carebot</h1>
+            <p>Free WhatsApp Integration Demo</p>
+            <p style="font-size: 0.9em; margin-top: 10px;">✅ Zero Cost • ❌ No Account Required • 🚀 Works Instantly</p>
+        </div>
+        
+        <div class="form-container">
+            <h2 style="margin-bottom: 30px; color: #333;">Upload Patient Document</h2>
+            
+            <form id="uploadForm">
+                <div class="form-group">
+                    <label for="patientName">👤 Patient Name *</label>
+                    <input type="text" id="patientName" name="patientName" required placeholder="Enter patient's full name">
+                </div>
+                
+                <div class="form-group">
+                    <label for="contactNumber">📞 Contact Number *</label>
+                    <input type="tel" id="contactNumber" name="contactNumber" required placeholder="Enter WhatsApp number (e.g., 9876543210)">
+                </div>
+                
+                <div class="form-group">
+                    <label for="dateOfBirth">🎂 Date of Birth *</label>
+                    <input type="date" id="dateOfBirth" name="dateOfBirth" required>
+                </div>
+                
+                <button type="submit" class="submit-btn" id="submitBtn">
+                    📱 Generate WhatsApp Notification
+                </button>
+            </form>
+            
+            <div class="loading" id="loading">
+                <div class="spinner"></div>
+                <p>Processing and generating WhatsApp link...</p>
+            </div>
+            
+            <div class="result" id="result">
+                <div id="resultContent"></div>
+            </div>
+        </div>
+        
+        <div class="status">
+            <p><strong>Backend Status:</strong> <span id="backendStatus">Checking...</span></p>
+            <p><strong>WhatsApp Service:</strong> <span id="whatsappStatus">Checking...</span></p>
+        </div>
+    </div>
+
+    <script>
+        // Check backend status on page load
+        checkBackendStatus();
+        
+        // Form submission handler
+        document.getElementById('uploadForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            submitForm();
+        });
+        
+        async function checkBackendStatus() {
+            try {
+                const response = await fetch('http://localhost:8080/api/health');
+                const data = await response.json();
+                
+                document.getElementById('backendStatus').textContent = '✅ Running';
+                document.getElementById('backendStatus').style.color = 'green';
+                
+                document.getElementById('whatsappStatus').textContent = '✅ ' + data.whatsapp;
+                document.getElementById('whatsappStatus').style.color = 'green';
+            } catch (error) {
+                document.getElementById('backendStatus').textContent = '❌ Not Available';
+                document.getElementById('backendStatus').style.color = 'red';
+                
+                document.getElementById('whatsappStatus').textContent = '❌ Backend Required';
+                document.getElementById('whatsappStatus').style.color = 'red';
+            }
+        }
+        
+        async function submitForm() {
+            const submitBtn = document.getElementById('submitBtn');
+            const loading = document.getElementById('loading');
+            const result = document.getElementById('result');
+            
+            // Show loading state
+            submitBtn.disabled = true;
+            loading.style.display = 'block';
+            result.style.display = 'none';
+            
+            // Get form data
+            const formData = new FormData();
+            formData.append('patientName', document.getElementById('patientName').value);
+            formData.append('contactNumber', document.getElementById('contactNumber').value);
+            formData.append('dateOfBirth', document.getElementById('dateOfBirth').value);
+            formData.append('uploadedBy', 'admin');
+            
+            try {
+                const response = await fetch('http://localhost:8080/api/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok && data.status === 'success') {
+                    showSuccess(data);
+                } else {
+                    showError(data.error || 'Upload failed');
+                }
+            } catch (error) {
+                showError('Network error: ' + error.message);
+            } finally {
+                // Hide loading state
+                submitBtn.disabled = false;
+                loading.style.display = 'none';
+            }
+        }
+        
+        function showSuccess(data) {
+            const result = document.getElementById('result');
+            const resultContent = document.getElementById('resultContent');
+            
+            resultContent.innerHTML = `
+                <h3>✅ WhatsApp Notification Generated!</h3>
+                <p><strong>Patient:</strong> ${data.patientName}</p>
+                <p><strong>Upload ID:</strong> ${data.uploadId}</p>
+                <p><strong>Status:</strong> ${data.message}</p>
+                <p><strong>Notification Sent:</strong> ${data.whatsappNotificationSent ? '✅ Yes' : '❌ No'}</p>
+                
+                <div style="margin-top: 20px; padding: 15px; background: #e8f5e8; border-radius: 6px;">
+                    <p><strong>📱 WhatsApp Message Ready!</strong></p>
+                    <p style="margin: 10px 0;">Click the button below to open WhatsApp with the pre-filled message:</p>
+                    <a href="${data.whatsappUrl}" target="_blank" class="whatsapp-link">
+                        📱 Open WhatsApp & Send Message
+                    </a>
+                </div>
+                
+                <div style="margin-top: 15px; font-size: 0.9em; color: #666;">
+                    <p><strong>How it works:</strong></p>
+                    <ul style="margin-left: 20px; margin-top: 5px;">
+                        <li>Click the WhatsApp button above</li>
+                        <li>WhatsApp will open with the message pre-filled</li>
+                        <li>Review the message and click send</li>
+                        <li>Patient receives instant notification!</li>
+                    </ul>
+                </div>
+            `;
+            
+            result.className = 'result success';
+            result.style.display = 'block';
+        }
+        
+        function showError(errorMessage) {
+            const result = document.getElementById('result');
+            const resultContent = document.getElementById('resultContent');
+            
+            resultContent.innerHTML = `
+                <h3>❌ Error</h3>
+                <p>${errorMessage}</p>
+                <p style="margin-top: 15px; font-size: 0.9em;">
+                    Please check if the backend server is running on http://localhost:8080
+                </p>
+            `;
+            
+            result.className = 'result error';
+            result.style.display = 'block';
+        }
+    </script>
+</body>
+</html>

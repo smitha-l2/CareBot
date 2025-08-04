@@ -1,0 +1,71 @@
+# Server Configuration
+server.port=8080
+server.servlet.context-path=/api
+
+# H2 Database Configuration
+spring.datasource.url=jdbc:h2:file:./data/carebot-db;DB_CLOSE_ON_EXIT=FALSE;AUTO_RECONNECT=TRUE
+spring.datasource.driverClassName=org.h2.Driver
+spring.datasource.username=carebot
+spring.datasource.password=carebot123
+
+# H2 Console (for development)
+spring.h2.console.enabled=true
+spring.h2.console.path=/h2-console
+spring.h2.console.settings.web-allow-others=true
+
+# JPA/Hibernate Configuration
+spring.jpa.database-platform=org.hibernate.dialect.H2Dialect
+spring.jpa.hibernate.ddl-auto=update
+spring.jpa.show-sql=true
+spring.jpa.properties.hibernate.format_sql=true
+
+# Multipart file upload configuration
+spring.servlet.multipart.max-file-size=10MB
+spring.servlet.multipart.max-request-size=10MB
+spring.servlet.multipart.enabled=true
+
+# Application Configuration
+app.upload.dir=./uploads
+app.name=Carebot Healthcare Backend
+app.version=1.0.0
+
+# CORS Configuration
+app.cors.allowed-origins=http://localhost:3000,http://127.0.0.1:3000
+app.cors.allowed-methods=GET,POST,PUT,DELETE,OPTIONS
+app.cors.allowed-headers=*
+app.cors.allow-credentials=true
+
+# Logging Configuration
+logging.level.com.carebot.backend=DEBUG
+logging.level.org.springframework.web=DEBUG
+logging.level.org.hibernate.SQL=DEBUG
+logging.level.org.hibernate.type.descriptor.sql.BasicBinder=TRACE
+
+# Actuator endpoints
+management.endpoints.web.exposure.include=health,info,metrics
+management.endpoint.health.show-details=always
+
+# WhatsApp Integration via Twilio
+# To enable WhatsApp notifications, set these values:
+# Get these from your Twilio Console: https://console.twilio.com/
+# REPLACE WITH YOUR ACTUAL TWILIO CREDENTIALS:
+twilio.account.sid=${TWILIO_ACCOUNT_SID:YOUR_TWILIO_ACCOUNT_SID_HERE}
+twilio.auth.token=${TWILIO_AUTH_TOKEN:YOUR_TWILIO_AUTH_TOKEN_HERE}
+twilio.whatsapp.from=whatsapp:+14155238886
+
+# WhatsApp Feature Toggle - SET TO TRUE TO ENABLE
+carebot.whatsapp.enabled=true
+
+# WhatsApp Configuration
+carebot.whatsapp.default-country-code=+91
+carebot.whatsapp.test-mode=true
+
+# Free WhatsApp Service (No account required!)
+carebot.whatsapp.free.enabled=true
+carebot.whatsapp.free.method=BROWSER_LINK
+carebot.whatsapp.free.fallback=true
+
+# Available methods for free service:
+# BROWSER_LINK - Generates WhatsApp URLs that open in browser (no automation)
+# EMAIL_NOTIFICATION - Sends email to admin with WhatsApp link
+# LOG_ONLY - Just logs the message (for testing)
