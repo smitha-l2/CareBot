@@ -14,12 +14,12 @@ Your Carebot application now has full Axios integration for uploading patient in
 - ✅ **Error Handling**: Comprehensive error messages
 - ✅ **Form Validation**: Patient name and contact number required
 
-### Backend (Node.js + Express + H2-like SQLite Database)
-- 📦 **Created**: Complete backend server with database integration
-- 🔧 **Location**: `backend/` directory
-- 📋 **Features**: File upload, patient data storage, H2-like database, validation
-- 🗄️  **Database**: SQLite with Sequelize ORM (H2-like functionality)
-- 📊 **APIs**: Full CRUD operations for patients and documents
+### Backend (Java Spring Boot + H2 Database)
+- ✅ **Running**: http://localhost:8080/api
+- ✅ **Spring Boot**: Java-based REST API with Maven
+- ✅ **H2 Database**: In-memory database with JPA/Hibernate
+- ✅ **WhatsApp Integration**: Twilio service with free URL fallback
+- ✅ **Follow-up Scheduler**: Advanced scheduling with automated notifications
 
 ## 🛠️ What's New
 
@@ -35,13 +35,17 @@ Your Carebot application now has full Axios integration for uploading patient in
 6. **Upload Status**: Visual feedback with success/error/progress states
 
 ### Backend API:
-- **POST** `/api/upload-patient-document` - Upload files with patient data → saves to H2-like database
-- **GET** `/api/patient-documents` - Retrieve uploaded documents with pagination
-- **GET** `/api/patients` - Get all patients with document counts
-- **GET** `/api/patients/:id` - Get specific patient with all documents
-- **GET** `/api/stats` - Database statistics (patients, documents, storage)
-- **PATCH** `/api/documents/:uploadId/status` - Update document status
-- **GET** `/api/health` - Server and database health check
+- **POST** `/api/upload` - Upload files with patient data → saves to H2 database
+- **POST** `/api/upload-document` - Alternative upload endpoint for frontend
+- **GET** `/api/patients` - Get all patients
+- **GET** `/api/documents` - Get all documents
+- **GET** `/api/patients/{id}/documents` - Get documents for specific patient
+- **PUT** `/api/patients/{id}` - Update patient information
+- **DELETE** `/api/patients/{id}` - Delete patient and associated documents
+- **POST** `/api/patients/{id}/follow-ups` - Schedule follow-up appointments
+- **GET** `/api/follow-ups/scheduled` - Get scheduled follow-ups
+- **GET** `/api/follow-ups/stats` - Follow-up statistics
+- **GET** `/api/health` - Server health check
 
 ## 🎯 How to Use
 
@@ -84,16 +88,13 @@ Carebot/
 │   ├── config/
 │   │   └── api.js (API configuration)
 │   └── index.css (updated with upload status styles)
-├── backend/
-│   ├── server.js (Express server with database)
-│   ├── database.js (H2-like SQLite models)
-│   ├── services.js (Database service layer)
-│   ├── package.json
-│   ├── install.bat (Quick installer)
-│   ├── start.bat (Quick starter)
-│   ├── carebot.db (SQLite database - auto-created)
-│   └── uploads/ (File storage directory)
+├── java-carebot-backend/
+│   ├── src/main/java/ (Spring Boot application)
+│   ├── src/main/resources/ (Configuration files)
+│   ├── target/ (Built artifacts)
+│   └── pom.xml (Maven configuration)
 ├── .env (frontend environment)
+├── start-java-backend.bat (Quick starter)
 └── AXIOS_INTEGRATION.md (this documentation)
 ```
 
@@ -219,7 +220,7 @@ NODE_ENV=development
 ## 🚀 Next Steps
 
 1. **Test the Upload**: Try uploading different file types
-2. **Start Backend**: Run `backend\start.bat` or `cd backend && npm start`
+2. **Start Java Backend**: Run `start-java-backend.bat` or `cd java-carebot-backend && mvn spring-boot:run`
 3. **Database**: SQLite database auto-creates with proper schema
 4. **View Data**: Check database with SQLite browser or API endpoints
 5. **API Testing**: Use endpoints to view patients, documents, statistics

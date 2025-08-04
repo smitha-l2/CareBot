@@ -22,11 +22,11 @@ A comprehensive healthcare management system with automatic WhatsApp notificatio
 ### Prerequisites
 
 - Java 17 or higher
-- Node.js (version 14 or higher)
 - Maven 3.6+
-- npm or yarn package manager
+- Node.js (version 14 or higher) - for React frontend only
+- npm or yarn package manager - for React frontend only
 
-### Backend Setup
+### Backend Setup (Java Spring Boot)
 
 1. **Clone the repository**
    ```bash
@@ -56,12 +56,21 @@ A comprehensive healthcare management system with automatic WhatsApp notificatio
    export TWILIO_AUTH_TOKEN=your_auth_token
    ```
 
-4. **Build and Run Backend**
+4. **Build and Run Java Backend**
+   
+   Option 1 - Using the provided batch file:
+   ```bash
+   start-java-backend.bat
+   ```
+   
+   Option 2 - Manual commands:
    ```bash
    cd java-carebot-backend
-   mvn clean package
-   java -Dspring.profiles.active=simple -jar target/java-carebot-backend-1.0.0.jar
+   mvn clean install
+   mvn spring-boot:run
    ```
+   
+   The backend will be available at: http://localhost:8080/api
 
 ### Frontend Setup
 
@@ -82,26 +91,42 @@ A comprehensive healthcare management system with automatic WhatsApp notificatio
 
 4. Open [http://localhost:3000](http://localhost:3000) to view the application in your browser.
 
-## Available Scripts
+## Available Scripts (Frontend)
 
-- `npm start` - Runs the app in development mode
-- `npm test` - Launches the test runner
-- `npm run build` - Builds the app for production
+- `npm start` - Runs the React app in development mode
+- `npm test` - Launches the test runner for React components
+- `npm run build` - Builds the React app for production
 - `npm run eject` - Ejects from Create React App (one-way operation)
+
+## Backend Commands
+
+- `start-java-backend.bat` - Quick start for Java Spring Boot backend
+- `mvn spring-boot:run` - Run backend from java-carebot-backend directory
+- `mvn clean install` - Build and install dependencies
 
 ## Project Structure
 
 ```
-src/
-  ├── App.js          # Main application component
-  ├── index.js        # Application entry point
-  └── index.css       # Global styles and component styles
+src/                          # React frontend source code
+  ├── App.js                 # Main application component
+  ├── index.js               # Application entry point
+  └── index.css              # Global styles and component styles
 
-public/
-  └── index.html      # HTML template
+public/                       # React frontend public assets
+  └── index.html             # HTML template
+
+java-carebot-backend/         # Java Spring Boot backend
+  ├── src/main/java/         # Java source code
+  ├── src/main/resources/    # Configuration files
+  ├── target/                # Built artifacts
+  └── pom.xml                # Maven configuration
 
 docs/
-  └── Patient_FAQ.md  # Comprehensive FAQ for patients
+  └── Patient_FAQ.md         # Comprehensive FAQ for patients
+
+package.json                  # Frontend (React) dependencies
+start-java-backend.bat       # Quick start script for Java backend
+start-carebot-complete.bat   # Complete system startup script
 ```
 
 ## Key Components
@@ -185,17 +210,34 @@ This creates a `build` folder with optimized production files.
 Create a `.env` file in the root directory for environment-specific configurations:
 
 ```
-REACT_APP_API_URL=http://localhost:5000
+REACT_APP_API_URL=http://localhost:8080
 REACT_APP_ENVIRONMENT=development
 ```
 
 ## API Integration
 
-The frontend is ready for backend integration. Update the following areas:
+The system includes a fully functional Java Spring Boot backend with the following endpoints:
 
-1. **Chat functionality** in `App.js` - Connect to your Carebot API
-2. **File upload** - Integrate with your file processing service
-3. **Authentication** - Add user authentication if required
+### Core Endpoints
+- `GET /api/health` - Health check
+- `GET /api/patients` - List all patients
+- `POST /api/upload` - Upload patient documents
+- `GET /api/documents` - List all documents
+- `PUT /api/patients/{id}` - Update patient information
+- `DELETE /api/patients/{id}` - Delete patient and documents
+
+### Follow-up Scheduler Endpoints
+- `POST /api/patients/{id}/follow-ups` - Schedule a follow-up
+- `GET /api/follow-ups/visit-types` - Get available visit types
+- `GET /api/follow-ups/scheduled` - List scheduled follow-ups
+- `GET /api/follow-ups/stats` - Follow-up statistics
+
+### WhatsApp Integration
+- Automatic notifications via Twilio WhatsApp API
+- Fallback to URL generation for non-sandbox numbers
+- Support for different visit types and message templates
+
+The frontend communicates with the Java backend via HTTP requests. The proxy in `package.json` redirects API calls to `http://localhost:8080`.
 
 ## Deployment
 

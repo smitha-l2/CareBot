@@ -3,6 +3,7 @@ package com.carebot.backend;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.context.annotation.Bean;
+import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.web.servlet.config.annotation.CorsRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
@@ -15,11 +16,13 @@ import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
  * - Prescription management
  * - RESTful API endpoints
  * - CORS support for React frontend
+ * - Automated follow-up scheduling and reminders
  * 
  * @author Carebot Team
  * @version 1.0.0
  */
 @SpringBootApplication
+@EnableScheduling
 public class JavaCarebotBackendApplication {
 
     public static void main(String[] args) {
