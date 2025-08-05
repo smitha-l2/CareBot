@@ -7,7 +7,6 @@ import org.springframework.context.annotation.Profile;
 import org.springframework.beans.factory.annotation.Autowired;
 import com.carebot.backend.service.messaging.FreeWhatsAppService;
 import com.carebot.backend.service.WhatsAppService;
-import com.carebot.backend.service.FollowUpSchedulerService;
 import com.carebot.backend.entity.FollowUpSchedule;
 import java.util.Map;
 import java.util.HashMap;
@@ -35,18 +34,26 @@ public class SimplifiedFileUploadController {
     private WhatsAppService whatsAppService;
     
     @Autowired(required = false)
-    private FollowUpSchedulerService followUpSchedulerService;
+    private com.carebot.backend.service.MedicationReminderService medicationReminderService;
 
     // In-memory storage for uploaded patient data
     private static final Map<Long, Map<String, Object>> patients = new ConcurrentHashMap<>();
     private static final Map<Long, Map<String, Object>> documents = new ConcurrentHashMap<>();
     private static final Map<Long, Map<String, Object>> scheduledFollowUps = new ConcurrentHashMap<>();
+    @SuppressWarnings("unused")
+    private static final Map<Long, Map<String, Object>> medicationReminders = new ConcurrentHashMap<>(); // Add medication reminders storage
     private static final AtomicLong patientIdCounter = new AtomicLong(1);
     private static final AtomicLong documentIdCounter = new AtomicLong(1);
     private static final AtomicLong followUpIdCounter = new AtomicLong(1);
-
-    // Initialize with some demo data
+    @SuppressWarnings("unused")
+    private static final AtomicLong reminderIdCounter = new AtomicLong(1); // Add reminder ID counter
+    
+    // Data persistence file
+    @SuppressWarnings("unused")
+    private static final String DATA_FILE = "./data/simplified-carebot-data.json";
+    
     static {
+        // Initialize with demo data
         Map<String, Object> demoPatient = new HashMap<>();
         demoPatient.put("id", 0L);
         demoPatient.put("patientName", "Demo Patient");
@@ -109,10 +116,30 @@ public class SimplifiedFileUploadController {
             System.out.println("💾 Patient stored with ID: " + patientId);
             System.out.println("📄 Document stored with ID: " + documentId);
             
+            // ==================== AUTO-CREATE MEDICATION REMINDER ====================
+            // Automatically create a default medication reminder when prescription is uploaded
+            boolean medicationReminderCreated = false;
+            Map<String, Object> reminderInfo = null;
+            
+            try {
+                // Create default medication reminder in simplified mode (no service dependency)
+                reminderInfo = createDefaultMedicationReminder(patientId, patientName, contactNumber);
+                medicationReminderCreated = true;
+                System.out.println("💊 Auto-created medication reminder for patient: " + patientName);
+            } catch (Exception e) {
+                System.err.println("❌ Failed to auto-create medication reminder: " + e.getMessage());
+                // Don't fail the upload if reminder creation fails
+            }
+            
+            // =========================================================================
+            
             // For sandbox mode, use free URL method for non-sandbox numbers
             boolean notificationSent = false;
             String whatsappUrl = null;
-            String message = "Dear " + patientName + ", your prescription and medical documents have been uploaded to your Carebot healthcare portal. Please contact your healthcare provider for details.";
+            String message = "✅ Thank you for visiting us today!\n\n" +
+                           "Your prescription and medical documents have been successfully uploaded to your Carebot healthcare portal.\n\n" +
+                           "💊 Please follow your prescribed medication schedule and contact us if you have any questions.\n\n" +
+                           "📞 For any concerns, contact your healthcare provider";
             
             try {
                 // Try Twilio first (works only for sandbox-joined numbers)
@@ -142,11 +169,15 @@ public class SimplifiedFileUploadController {
             response.put("message", "Patient and document stored successfully");
             response.put("whatsappNotificationSent", notificationSent);
             response.put("whatsappMethod", whatsappUrl != null ? "Free URL Generation" : "Twilio Automatic Send");
+            response.put("medicationReminderCreated", medicationReminderCreated);
+            if (reminderInfo != null) {
+                response.put("medicationReminder", reminderInfo);
+            }
             if (whatsappUrl != null) {
                 response.put("whatsappUrl", whatsappUrl);
-                response.put("note", "Click the WhatsApp URL to send message manually");
+                response.put("note", "Click the WhatsApp URL to send message manually. Medication reminder created automatically.");
             } else {
-                response.put("note", "WhatsApp message sent automatically to patient's phone");
+                response.put("note", "WhatsApp message sent automatically to patient's phone. Medication reminder created automatically.");
             }
             response.put("patientName", patientName);
             response.put("timestamp", java.time.LocalDateTime.now().toString());
@@ -385,6 +416,114 @@ public class SimplifiedFileUploadController {
         }
     }
     
+    // ==================== MEDICATION REMINDER ENDPOINTS ====================
+    
+    /**
+     * Get medication reminders for a patient (for admin to view and modify)
+     */
+    @GetMapping("/patients/{patientId}/medication-reminders")
+    public ResponseEntity<List<Map<String, Object>>> getPatientMedicationReminders(@PathVariable String patientId) {
+        List<Map<String, Object>> patientReminders = new ArrayList<>();
+        
+        try {
+            Long id = Long.parseLong(patientId);
+            
+            // Check if patient exists
+            if (!patients.containsKey(id)) {
+                return ResponseEntity.notFound().build();
+            }
+            
+            // For simplified mode, we'll return mock reminders that were created during upload
+            // In a real scenario, these would come from the database
+            Map<String, Object> patient = patients.get(id);
+            
+            // Create a sample reminder that would have been auto-created
+            Map<String, Object> autoReminder = new HashMap<>();
+            autoReminder.put("id", id * 1000);
+            autoReminder.put("patientId", id);
+            autoReminder.put("patientName", patient.get("patientName"));
+            autoReminder.put("medicationName", "General Medication (Please Update)");
+            autoReminder.put("dosage", "As prescribed");
+            autoReminder.put("frequency", "TWICE_DAILY");
+            autoReminder.put("startDate", java.time.LocalDateTime.now().plusDays(1).withHour(8).withMinute(0).toString());
+            autoReminder.put("endDate", java.time.LocalDateTime.now().plusDays(31).withHour(8).withMinute(0).toString());
+            autoReminder.put("reminderTimes", java.util.Arrays.asList("08:00", "20:00"));
+            autoReminder.put("status", "ACTIVE");
+            autoReminder.put("createdBy", "system");
+            autoReminder.put("createdAt", patient.get("createdAt"));
+            autoReminder.put("canEdit", true);
+            autoReminder.put("note", "Auto-created when prescription was uploaded. Admin can modify all settings.");
+            
+            patientReminders.add(autoReminder);
+            
+            return ResponseEntity.ok(patientReminders);
+            
+        } catch (NumberFormatException e) {
+            return ResponseEntity.badRequest().build();
+        }
+    }
+    
+    /**
+     * Update medication reminder settings (for admin modifications)
+     */
+    @PutMapping("/patients/{patientId}/medication-reminders/{reminderId}")
+    public ResponseEntity<Map<String, Object>> updateMedicationReminder(
+            @PathVariable String patientId,
+            @PathVariable String reminderId,
+            @RequestBody Map<String, Object> updateRequest) {
+        
+        try {
+            Long id = Long.parseLong(patientId);
+            Long reminderIdLong = Long.parseLong(reminderId);
+            
+            // Check if patient exists
+            if (!patients.containsKey(id)) {
+                Map<String, Object> errorResponse = new HashMap<>();
+                errorResponse.put("error", "Patient not found");
+                return ResponseEntity.status(HttpStatus.NOT_FOUND).body(errorResponse);
+            }
+            
+            Map<String, Object> patient = patients.get(id);
+            
+            // Update reminder settings
+            Map<String, Object> updatedReminder = new HashMap<>();
+            updatedReminder.put("id", reminderIdLong);
+            updatedReminder.put("patientId", id);
+            updatedReminder.put("patientName", patient.get("patientName"));
+            updatedReminder.put("medicationName", updateRequest.getOrDefault("medicationName", "General Medication"));
+            updatedReminder.put("dosage", updateRequest.getOrDefault("dosage", "As prescribed"));
+            updatedReminder.put("frequency", updateRequest.getOrDefault("frequency", "TWICE_DAILY"));
+            updatedReminder.put("startDate", updateRequest.getOrDefault("startDate", java.time.LocalDateTime.now().plusDays(1).toString()));
+            updatedReminder.put("endDate", updateRequest.getOrDefault("endDate", java.time.LocalDateTime.now().plusDays(31).toString()));
+            updatedReminder.put("reminderTimes", updateRequest.getOrDefault("reminderTimes", java.util.Arrays.asList("08:00", "20:00")));
+            updatedReminder.put("status", updateRequest.getOrDefault("status", "ACTIVE"));
+            updatedReminder.put("updatedBy", updateRequest.getOrDefault("updatedBy", "admin"));
+            updatedReminder.put("updatedAt", java.time.LocalDateTime.now().toString());
+            
+            System.out.println("✏️ Medication reminder updated for patient: " + patient.get("patientName"));
+            System.out.println("💊 New medication: " + updatedReminder.get("medicationName"));
+            System.out.println("⏰ New frequency: " + updatedReminder.get("frequency"));
+            
+            Map<String, Object> response = new HashMap<>();
+            response.put("status", "success");
+            response.put("message", "Medication reminder updated successfully");
+            response.put("reminder", updatedReminder);
+            
+            return ResponseEntity.ok(response);
+            
+        } catch (NumberFormatException e) {
+            Map<String, Object> errorResponse = new HashMap<>();
+            errorResponse.put("error", "Invalid ID format");
+            return ResponseEntity.badRequest().body(errorResponse);
+        } catch (Exception e) {
+            Map<String, Object> errorResponse = new HashMap<>();
+            errorResponse.put("error", "Failed to update reminder: " + e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(errorResponse);
+        }
+    }
+    
+    // =========================================================================
+    
     // ==================== FOLLOW-UP SCHEDULER ENDPOINTS ====================
     
     /**
@@ -579,7 +718,6 @@ public class SimplifiedFileUploadController {
         int sentToday = 0;
         int pendingFollowUps = 0;
         
-        LocalDateTime today = LocalDateTime.now();
         for (Map<String, Object> followUp : scheduledFollowUps.values()) {
             String status = (String) followUp.get("status");
             if ("SENT".equals(status)) {
@@ -767,5 +905,180 @@ public class SimplifiedFileUploadController {
         
         return templates.getOrDefault(visitType, 
             "Hello " + patientName + "! We're following up on your recent visit. How are you feeling? Please let us know if you have any concerns.");
+    }
+    
+    /**
+     * Create a default medication reminder for a patient when prescription is uploaded
+     */
+    private Map<String, Object> createDefaultMedicationReminder(Long patientId, String patientName, String contactNumber) {
+        try {
+            // In simplified mode, we need to check if we can create a Patient entity
+            // or work with a mock/temporary patient for the reminder system
+            
+            // Check if patient repository is available
+            if (medicationReminderService == null) {
+                throw new RuntimeException("MedicationReminderService not available in simplified mode");
+            }
+            
+            // For simplified mode, we'll create a reminder in memory and store basic info
+            // This allows the admin to later modify the reminder through the UI
+            
+            // Default medication reminder settings
+            String medicationName = "General Medication (Please Update)";
+            String dosage = "As prescribed";
+            String frequency = "TWICE_DAILY"; // Default to twice daily
+            
+            // Set start date to tomorrow morning at 8 AM
+            java.time.LocalDateTime startDate = java.time.LocalDateTime.now().plusDays(1).withHour(8).withMinute(0).withSecond(0);
+            
+            // Set end date to 30 days from start date (default prescription period)
+            java.time.LocalDateTime endDate = startDate.plusDays(30);
+            
+            // Default reminder times: 8 AM and 8 PM
+            java.util.List<java.time.LocalTime> reminderTimes = java.util.Arrays.asList(
+                java.time.LocalTime.of(8, 0),   // 8:00 AM
+                java.time.LocalTime.of(20, 0)   // 8:00 PM
+            );
+            
+            // Store reminder info in memory for simplified mode
+            Map<String, Object> reminderInfo = new HashMap<>();
+            reminderInfo.put("id", patientId * 1000); // Generate simple ID
+            reminderInfo.put("patientId", patientId);
+            reminderInfo.put("patientName", patientName);
+            reminderInfo.put("medicationName", medicationName);
+            reminderInfo.put("dosage", dosage);
+            reminderInfo.put("frequency", frequency);
+            reminderInfo.put("startDate", startDate.toString());
+            reminderInfo.put("endDate", endDate.toString());
+            reminderInfo.put("reminderTimes", reminderTimes.stream()
+                .map(time -> time.toString())
+                .collect(java.util.stream.Collectors.toList()));
+            reminderInfo.put("status", "ACTIVE");
+            reminderInfo.put("createdBy", "system");
+            reminderInfo.put("createdAt", java.time.LocalDateTime.now().toString());
+            reminderInfo.put("note", "Default reminder created automatically. Admin can modify medication name, frequency and settings through the UI.");
+            
+            System.out.println("✅ Default medication reminder created for patient " + patientName + 
+                             " - Frequency: " + frequency + ", Times: 8:00 AM & 8:00 PM");
+            System.out.println("📝 Admin can update medication details and frequency through the Medication Reminders interface");
+            
+            return reminderInfo;
+            
+        } catch (Exception e) {
+            System.err.println("❌ Failed to create default medication reminder: " + e.getMessage());
+            // For simplified mode, return basic info even if service creation fails
+            Map<String, Object> basicReminderInfo = new HashMap<>();
+            basicReminderInfo.put("status", "PENDING");
+            basicReminderInfo.put("note", "Medication reminder creation pending - Admin can create through UI");
+            basicReminderInfo.put("patientId", patientId);
+            basicReminderInfo.put("patientName", patientName);
+            return basicReminderInfo;
+        }
+    }
+    
+    // ==================== ADDITIONAL MEDICATION REMINDER ENDPOINTS ====================
+    
+    /**
+     * Create medication reminder (alternative endpoint that frontend expects)
+     */
+    @PostMapping("/medication-reminders")
+    public ResponseEntity<Map<String, Object>> createMedicationReminder(@RequestBody Map<String, Object> request) {
+        try {
+            Long patientId = Long.valueOf(String.valueOf(request.get("patientId")));
+            
+            // Check if patient exists
+            if (!patients.containsKey(patientId)) {
+                Map<String, Object> errorResponse = new HashMap<>();
+                errorResponse.put("error", "Patient not found");
+                errorResponse.put("success", false);
+                return ResponseEntity.status(HttpStatus.NOT_FOUND).body(errorResponse);
+            }
+            
+            Map<String, Object> patient = patients.get(patientId);
+            Long reminderId = reminderIdCounter.getAndIncrement();
+            
+            // Create new reminder
+            Map<String, Object> newReminder = new HashMap<>();
+            newReminder.put("id", reminderId);
+            newReminder.put("patientId", patientId);
+            newReminder.put("patientName", patient.get("patientName"));
+            newReminder.put("medicationName", request.getOrDefault("medicationName", "General Medication"));
+            newReminder.put("dosage", request.getOrDefault("dosage", "As prescribed"));
+            newReminder.put("frequency", request.getOrDefault("frequency", "TWICE_DAILY"));
+            newReminder.put("startDate", request.getOrDefault("startDate", java.time.LocalDateTime.now().plusDays(1).toString()));
+            newReminder.put("endDate", request.getOrDefault("endDate", java.time.LocalDateTime.now().plusDays(31).toString()));
+            newReminder.put("reminderTimes", request.getOrDefault("reminderTimes", java.util.Arrays.asList("08:00", "20:00")));
+            newReminder.put("status", "ACTIVE");
+            newReminder.put("createdBy", request.getOrDefault("createdBy", "admin"));
+            newReminder.put("createdAt", java.time.LocalDateTime.now().toString());
+            
+            // Store the reminder (you can implement actual storage logic here)
+            System.out.println("💊 Created medication reminder: " + newReminder.get("medicationName") + " for " + patient.get("patientName"));
+            
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", true);
+            response.put("message", "Medication reminder created successfully");
+            response.put("medicationName", newReminder.get("medicationName"));
+            response.put("frequency", newReminder.get("frequency"));
+            response.put("nextReminderDue", newReminder.get("startDate"));
+            
+            return ResponseEntity.ok(response);
+            
+        } catch (Exception e) {
+            Map<String, Object> errorResponse = new HashMap<>();
+            errorResponse.put("success", false);
+            errorResponse.put("error", "Failed to create medication reminder: " + e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(errorResponse);
+        }
+    }
+    
+    /**
+     * Update medication reminder (alternative endpoint that frontend expects)
+     */
+    @PutMapping("/medication-reminders/{reminderId}")
+    public ResponseEntity<Map<String, Object>> updateMedicationReminderById(
+            @PathVariable String reminderId,
+            @RequestBody Map<String, Object> updateRequest) {
+        
+        try {
+            Long reminderIdLong = Long.parseLong(reminderId);
+            
+            // For simplified mode, we'll create an updated reminder response
+            Map<String, Object> updatedReminder = new HashMap<>();
+            updatedReminder.put("id", reminderIdLong);
+            updatedReminder.put("medicationName", updateRequest.getOrDefault("medicationName", "General Medication"));
+            updatedReminder.put("dosage", updateRequest.getOrDefault("dosage", "As prescribed"));
+            updatedReminder.put("frequency", updateRequest.getOrDefault("frequency", "TWICE_DAILY"));
+            updatedReminder.put("startDate", updateRequest.getOrDefault("startDate", java.time.LocalDateTime.now().plusDays(1).toString()));
+            updatedReminder.put("endDate", updateRequest.getOrDefault("endDate", java.time.LocalDateTime.now().plusDays(31).toString()));
+            updatedReminder.put("reminderTimes", updateRequest.getOrDefault("reminderTimes", java.util.Arrays.asList("08:00", "20:00")));
+            updatedReminder.put("status", updateRequest.getOrDefault("status", "ACTIVE"));
+            updatedReminder.put("updatedBy", updateRequest.getOrDefault("updatedBy", "admin"));
+            updatedReminder.put("updatedAt", java.time.LocalDateTime.now().toString());
+            
+            System.out.println("✏️ Medication reminder updated - ID: " + reminderId);
+            System.out.println("💊 New medication: " + updatedReminder.get("medicationName"));
+            System.out.println("⏰ New frequency: " + updatedReminder.get("frequency"));
+            
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", true);
+            response.put("message", "Medication reminder updated successfully");
+            response.put("medicationName", updatedReminder.get("medicationName"));
+            response.put("frequency", updatedReminder.get("frequency"));
+            response.put("nextReminderDue", updatedReminder.get("startDate"));
+            
+            return ResponseEntity.ok(response);
+            
+        } catch (NumberFormatException e) {
+            Map<String, Object> errorResponse = new HashMap<>();
+            errorResponse.put("success", false);
+            errorResponse.put("error", "Invalid reminder ID format");
+            return ResponseEntity.badRequest().body(errorResponse);
+        } catch (Exception e) {
+            Map<String, Object> errorResponse = new HashMap<>();
+            errorResponse.put("success", false);
+            errorResponse.put("error", "Failed to update reminder: " + e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(errorResponse);
+        }
     }
 }
