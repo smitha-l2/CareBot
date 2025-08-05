@@ -139,7 +139,8 @@ public class WhatsAppService {
         
         message.append("🏥 *CAREBOT HEALTH NOTIFICATION*\n\n");
         message.append("Dear ").append(patient.getPatientName()).append(",\n\n");
-        message.append("📋 Your prescription/medical document has been processed:\n\n");
+        message.append("✅ Thank you for visiting us today!\n\n");
+        message.append("Your prescription and medical documents have been successfully uploaded to your Carebot healthcare portal.\n\n");
         
         message.append("📄 *Document Details:*\n");
         message.append("• File: ").append(document.getOriginalFilename()).append("\n");
@@ -152,12 +153,12 @@ public class WhatsAppService {
             message.append("• Notes: ").append(document.getDescription()).append("\n");
         }
         
-        message.append("\n👨‍⚕️ *Important Reminders:*\n");
-        message.append("• Follow prescribed medication schedule\n");
-        message.append("• Contact your doctor for any concerns\n");
+        message.append("\n� *Important Reminders:*\n");
+        message.append("• Follow your prescribed medication schedule\n");
+        message.append("• Contact your healthcare provider for any questions\n");
         message.append("• Keep this document for your records\n");
         
-        message.append("\n📞 For questions, contact your healthcare provider\n");
+        message.append("\n📞 For any concerns, contact your healthcare provider\n");
         message.append("🚨 Emergency? Call your local emergency number\n\n");
         message.append("*This is an automated message from Carebot Healthcare System*");
         

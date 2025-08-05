@@ -1,0 +1,52 @@
+🚀 CAREBOT STARTUP INSTRUCTIONS
+=====================================
+
+QUICK START (Choose ONE method):
+
+METHOD 1: Double-click Files
+----------------------------
+1. Navigate to: c:\Users\2313829\Downloads\Carebot
+2. Double-click: start-carebot-system.bat
+   (This will start both backend and frontend automatically)
+
+METHOD 2: VS Code Run & Debug
+-----------------------------
+1. Go to Run and Debug panel (Ctrl+Shift+D)
+2. Select "Start CareBot Backend" from dropdown
+3. Click the green play button
+4. Open new terminal (Ctrl+Shift+`)
+5. Run: npm start
+
+METHOD 3: Manual Terminal Commands
+----------------------------------
+Terminal 1 (Backend):
+cd "c:\Users\2313829\Downloads\Carebot\java-carebot-backend"
+java -jar target\java-carebot-backend-1.0.0.jar
+
+Terminal 2 (Frontend):
+cd "c:\Users\2313829\Downloads\Carebot"
+npm start
+
+EXPECTED RESULTS:
+================
+✅ Backend: http://localhost:8080/api
+✅ Frontend: http://localhost:3000 (or 3001)
+✅ H2 Console: http://localhost:8080/api/h2-console
+
+FEATURES READY:
+===============
+✅ Patient Management
+✅ Document Upload  
+✅ Follow-up Scheduling
+✅ Medication Reminders (NEW!)
+✅ WhatsApp Integration
+✅ Doctor Management
+✅ Appointment Scheduling
+
+TROUBLESHOOTING:
+================
+- If port 3000 is busy, React will ask to use 3001 (choose Y)
+- If backend won't start, check Java version: java -version
+- If frontend won't start, check Node: npm --version
+
+🎯 EASIEST WAY: Just double-click "start-carebot-system.bat"

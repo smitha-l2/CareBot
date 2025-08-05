@@ -48,7 +48,27 @@ function App() {
   const [followUpFilter, setFollowUpFilter] = useState('all');
   
   // Admin view management
-  const [currentAdminView, setCurrentAdminView] = useState('none'); // 'upload', 'dashboard', 'followup', 'doctors', 'appointments', 'queries', or 'none'
+  const [currentAdminView, setCurrentAdminView] = useState('none'); // 'upload', 'dashboard', 'followup', 'doctors', 'appointments', 'queries', 'medication-reminders', or 'none'
+  
+  // Medication Reminder functionality
+  const [showMedicationReminders, setShowMedicationReminders] = useState(false);
+  const [medicationReminders, setMedicationReminders] = useState([]);
+  const [selectedReminderPatient, setSelectedReminderPatient] = useState(null);
+  const [medicationReminderForm, setMedicationReminderForm] = useState({
+    medicationName: '',
+    dosage: '',
+    frequency: 'ONCE_DAILY',
+    startDate: '',
+    endDate: '',
+    reminderTimes: ['08:00'],
+    specialInstructions: ''
+  });
+  const [availableFrequencies, setAvailableFrequencies] = useState([]);
+  const [isCreatingReminder, setIsCreatingReminder] = useState(false);
+  const [editingReminder, setEditingReminder] = useState(null); // For tracking which reminder is being edited
+  const [reminderStats, setReminderStats] = useState(null);
+  const [adherenceReports, setAdherenceReports] = useState({});
+  const [isLoadingReminders, setIsLoadingReminders] = useState(false);
   
   // Doctor Management functionality (Admin only)
   // const [showDoctorManagement, setShowDoctorManagement] = useState(false); // Unused - commented out
@@ -2546,8 +2566,13 @@ function App() {
         const whatsappMessage = whatsappSent ? 
           '✅ WhatsApp thank you message sent to patient\n📅 Follow-up reminders scheduled' : 
           '⚠️ WhatsApp notification could not be sent';
+          
+        // Check if medication reminder was auto-created
+        const medicationReminderMessage = response.data.medicationReminderCreated ? 
+          `\n\n💊 Medication Reminder Auto-Created:\n• Frequency: Twice Daily (8 AM & 8 PM)\n• Duration: 30 days\n• Status: Admin can modify settings` : 
+          '\n\n⚠️ Medication reminder pending - can be created manually';
         
-        alert(`Document uploaded successfully!\n\nPatient: ${patientName}\nUpload ID: ${uploadId}\nStatus: Completed\n\n${whatsappMessage}\n\n🔔 Automated follow-up reminders set up for every 3 days\n\nReturning to dashboard...`);
+        alert(`Document uploaded successfully!\n\nPatient: ${patientName}\nUpload ID: ${uploadId}\nStatus: Completed\n\n${whatsappMessage}\n\n🔔 Automated follow-up reminders set up for every 3 days${medicationReminderMessage}\n\nReturning to dashboard...`);
         
         // Reset form and navigate back to default view after successful upload
         setTimeout(() => {
@@ -2838,6 +2863,282 @@ function App() {
         });
       }
     }, 100); // Small delay to ensure the section is rendered
+  };
+
+  // ==================== MEDICATION REMINDER FUNCTIONS ====================
+
+  /**
+   * Fetch medication reminders for a specific patient (including auto-created ones)
+   */
+  const fetchPatientMedicationReminders = async (patientId) => {
+    try {
+      const response = await axios.get(getApiUrl(`/patients/${patientId}/medication-reminders`));
+      return response.data;
+    } catch (error) {
+      console.error('❌ Error fetching patient medication reminders:', error);
+      return [];
+    }
+  };
+
+  /**
+   * Update medication reminder (for admin modifications)
+   */
+  const updateMedicationReminder = async (reminderId) => {
+    if (!selectedReminderPatient) {
+      alert('Please select a patient for the medication reminder.');
+      return;
+    }
+
+    if (!medicationReminderForm.medicationName.trim() || !medicationReminderForm.dosage.trim()) {
+      alert('Please fill in medication name and dosage.');
+      return;
+    }
+
+    setIsCreatingReminder(true);
+    try {
+      const updateData = {
+        medicationName: medicationReminderForm.medicationName,
+        dosage: medicationReminderForm.dosage,
+        frequency: medicationReminderForm.frequency,
+        startDate: medicationReminderForm.startDate || new Date().toISOString(),
+        endDate: medicationReminderForm.endDate || null,
+        reminderTimes: medicationReminderForm.reminderTimes,
+        additionalNotes: medicationReminderForm.additionalNotes || ''
+      };
+
+      const response = await axios.put(getApiUrl(`/medication-reminders/${reminderId}`), updateData);
+      
+      if (response.data.success) {
+        alert(`✅ Medication reminder updated successfully!\n\nMedication: ${response.data.medicationName}\nFrequency: ${response.data.frequency}\nNext reminder: ${response.data.nextReminderDue ? new Date(response.data.nextReminderDue).toLocaleString() : 'Not scheduled'}`);
+        
+        // Reset form
+        setMedicationReminderForm({
+          medicationName: '',
+          dosage: '',
+          frequency: 'ONCE_DAILY',
+          startDate: '',
+          endDate: '',
+          reminderTimes: ['08:00'],
+          additionalNotes: ''
+        });
+        
+        // Clear editing mode
+        setEditingReminder(null);
+        
+        // Refresh reminders list
+        if (selectedReminderPatient) {
+          fetchPatientReminders(selectedReminderPatient.id);
+        }
+        
+        // Refresh stats
+        fetchReminderStats();
+      } else {
+        alert('❌ Failed to update medication reminder: ' + response.data.error);
+      }
+    } catch (error) {
+      console.error('❌ Error updating medication reminder:', error);
+      alert('❌ Failed to update medication reminder: ' + (error.response?.data?.error || error.message));
+    } finally {
+      setIsCreatingReminder(false);
+    }
+  };
+
+  /**
+   * Fetch available medication reminder frequencies
+   */
+  const fetchMedicationFrequencies = async () => {
+    try {
+      const response = await axios.get(getApiUrl('/medication-reminders/frequencies'));
+      if (response.data.success) {
+        setAvailableFrequencies(response.data.frequencies);
+      }
+    } catch (error) {
+      console.error('❌ Error fetching frequencies:', error);
+    }
+  };
+
+  /**
+   * Create new medication reminder
+   */
+  const createMedicationReminder = async () => {
+    if (!selectedReminderPatient) {
+      alert('Please select a patient for the medication reminder.');
+      return;
+    }
+
+    if (!medicationReminderForm.medicationName.trim() || !medicationReminderForm.dosage.trim()) {
+      alert('Please fill in medication name and dosage.');
+      return;
+    }
+
+    setIsCreatingReminder(true);
+    try {
+      const requestData = {
+        patientId: selectedReminderPatient.id,
+        medicationName: medicationReminderForm.medicationName,
+        dosage: medicationReminderForm.dosage,
+        frequency: medicationReminderForm.frequency,
+        startDate: medicationReminderForm.startDate || new Date().toISOString(),
+        endDate: medicationReminderForm.endDate || null,
+        reminderTimes: medicationReminderForm.reminderTimes,
+        createdBy: userRole
+      };
+
+      const response = await axios.post(getApiUrl('/medication-reminders'), requestData);
+      
+      if (response.data.success) {
+        alert(`✅ Medication reminder created successfully!\n\nMedication: ${response.data.medicationName}\nFrequency: ${response.data.frequency}\nNext reminder: ${response.data.nextReminderDue ? new Date(response.data.nextReminderDue).toLocaleString() : 'Not scheduled'}`);
+        
+        // Reset form
+        setMedicationReminderForm({
+          medicationName: '',
+          dosage: '',
+          frequency: 'ONCE_DAILY',
+          startDate: '',
+          endDate: '',
+          reminderTimes: ['08:00'],
+          specialInstructions: ''
+        });
+        
+        // Clear editing mode
+        setEditingReminder(null);
+        
+        // Refresh reminders list
+        if (selectedReminderPatient) {
+          fetchPatientReminders(selectedReminderPatient.id);
+        }
+        
+        // Refresh stats
+        fetchReminderStats();
+      } else {
+        alert('❌ Failed to create medication reminder: ' + response.data.error);
+      }
+    } catch (error) {
+      console.error('❌ Error creating medication reminder:', error);
+      alert('❌ Failed to create medication reminder: ' + (error.response?.data?.error || error.message));
+    } finally {
+      setIsCreatingReminder(false);
+    }
+  };
+
+  /**
+   * Fetch medication reminders for a patient
+   */
+  const fetchPatientReminders = async (patientId) => {
+    setIsLoadingReminders(true);
+    try {
+      const response = await axios.get(getApiUrl(`/medication-reminders/patient/${patientId}`));
+      if (response.data.success) {
+        setMedicationReminders(response.data.reminders);
+      }
+    } catch (error) {
+      console.error('❌ Error fetching patient reminders:', error);
+      setMedicationReminders([]);
+    } finally {
+      setIsLoadingReminders(false);
+    }
+  };
+
+  /**
+   * Fetch adherence report for a patient
+   */
+  const fetchAdherenceReport = async (patientId, days = 30) => {
+    try {
+      const response = await axios.get(getApiUrl(`/medication-reminders/adherence-report/${patientId}?days=${days}`));
+      if (response.data.success) {
+        setAdherenceReports(prev => ({
+          ...prev,
+          [patientId]: response.data.adherenceReport
+        }));
+      }
+    } catch (error) {
+      console.error('❌ Error fetching adherence report:', error);
+    }
+  };
+
+  /**
+   * Fetch medication reminder dashboard statistics
+   */
+  const fetchReminderStats = async () => {
+    try {
+      const response = await axios.get(getApiUrl('/medication-reminders/dashboard-stats'));
+      if (response.data.success) {
+        setReminderStats(response.data.stats);
+      }
+    } catch (error) {
+      console.error('❌ Error fetching reminder stats:', error);
+    }
+  };
+
+  /**
+   * Mark dose as taken
+   */
+  const markDoseAsTaken = async (patientId, medicationName) => {
+    try {
+      const response = await axios.post(getApiUrl('/medication-reminders/dose-taken'), {
+        patientId: patientId,
+        medicationName: medicationName,
+        takenTime: new Date().toISOString()
+      });
+      
+      if (response.data.success) {
+        alert(`✅ Dose marked as taken for ${medicationName}`);
+        // Refresh reminders
+        fetchPatientReminders(patientId);
+        fetchAdherenceReport(patientId);
+      }
+    } catch (error) {
+      console.error('❌ Error marking dose as taken:', error);
+      alert('❌ Failed to mark dose as taken: ' + (error.response?.data?.error || error.message));
+    }
+  };
+
+  /**
+   * Mark dose as missed
+   */
+  const markDoseAsMissed = async (patientId, medicationName) => {
+    try {
+      const response = await axios.post(getApiUrl('/medication-reminders/dose-missed'), {
+        patientId: patientId,
+        medicationName: medicationName
+      });
+      
+      if (response.data.success) {
+        alert(`❌ Dose marked as missed for ${medicationName}`);
+        // Refresh reminders
+        fetchPatientReminders(patientId);
+        fetchAdherenceReport(patientId);
+      }
+    } catch (error) {
+      console.error('❌ Error marking dose as missed:', error);
+      alert('❌ Failed to mark dose as missed: ' + (error.response?.data?.error || error.message));
+    }
+  };
+
+  /**
+   * Initialize medication reminders section
+   */
+  const initializeMedicationReminders = () => {
+    setShowMedicationReminders(true);
+    setCurrentAdminView('medication-reminders');
+    fetchMedicationFrequencies();
+    fetchReminderStats();
+  };
+
+  /**
+   * Handle reminder time changes
+   */
+  const updateReminderTimes = (frequency) => {
+    const defaultTimes = {
+      'ONCE_DAILY': ['08:00'],
+      'TWICE_DAILY': ['08:00', '20:00'],
+      'THRICE_DAILY': ['08:00', '14:00', '20:00'],
+      'FOUR_TIMES_DAILY': ['08:00', '12:00', '16:00', '20:00'],
+      'FIVE_TIMES_DAILY': ['08:00', '11:00', '14:00', '17:00', '20:00'],
+      'SIX_TIMES_DAILY': ['08:00', '10:00', '12:00', '14:00', '16:00', '20:00']
+    };
+    
+    return defaultTimes[frequency] || ['08:00'];
   };
 
   const quickActions = [
@@ -4068,6 +4369,414 @@ function App() {
         </div>
       )}
 
+      {/* Medication Reminders - Admin Only */}
+      {showMedicationReminders && hasUploadAccess && (
+        <div className="medication-reminders-section">
+          <div className="medication-header">
+            <h2 className="section-title">
+              💊 Medication Reminders
+              <span className="admin-only-badge">Admin Only</span>
+            </h2>
+            <div className="header-buttons">
+              <button 
+                className="refresh-btn"
+                onClick={fetchReminderStats}
+              >
+                🔄 Refresh Stats
+              </button>
+              <button 
+                className="back-btn"
+                onClick={() => {
+                  setShowMedicationReminders(false);
+                  setCurrentAdminView('none');
+                }}
+              >
+                🏠 Back to Admin Dashboard
+              </button>
+            </div>
+          </div>
+
+          {/* Medication Reminder Statistics */}
+          {reminderStats && (
+            <div className="medication-stats">
+              <h3 className="subsection-title">📊 Medication Reminder Statistics</h3>
+              <div className="stats-grid">
+                <div className="stat-card">
+                  <div className="stat-value">{reminderStats.totalActiveReminders}</div>
+                  <div className="stat-label">Active Reminders</div>
+                </div>
+                <div className="stat-card">
+                  <div className="stat-value">{reminderStats.remindersDueNow}</div>
+                  <div className="stat-label">Due Now</div>
+                </div>
+                <div className="stat-card">
+                  <div className="stat-value">{reminderStats.remindersSentToday}</div>
+                  <div className="stat-label">Sent Today</div>
+                </div>
+                <div className="stat-card">
+                  <div className="stat-value">{reminderStats.dosesTakenToday}</div>
+                  <div className="stat-label">Doses Taken Today</div>
+                </div>
+                <div className="stat-card">
+                  <div className="stat-value">{reminderStats.dosesMissedToday}</div>
+                  <div className="stat-label">Doses Missed Today</div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Create New Medication Reminder */}
+          <div className="create-reminder-section">
+            <h3 className="subsection-title">➕ Create New Medication Reminder</h3>
+            
+            {/* Patient Selection */}
+            <div className="patient-selection">
+              <h4>👤 Select Patient</h4>
+              <div className="patient-dropdown">
+                <select 
+                  value={selectedReminderPatient?.id || ''} 
+                  onChange={(e) => {
+                    const patientId = e.target.value;
+                    const patient = patients.find(p => p.id === parseInt(patientId));
+                    setSelectedReminderPatient(patient);
+                    if (patient) {
+                      fetchPatientReminders(patient.id);
+                      fetchAdherenceReport(patient.id);
+                    }
+                  }}
+                  className="patient-select"
+                >
+                  <option value="">Choose a patient...</option>
+                  {patients.map(patient => (
+                    <option key={patient.id} value={patient.id}>
+                      {patient.patientName} - {patient.contactNumber}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            {/* Medication Reminder Form */}
+            {selectedReminderPatient && (
+              <>
+                {/* Auto-Created Reminders Section */}
+                <div className="auto-reminders-section">
+                  <h4>🔄 Auto-Created Medication Reminders</h4>
+                  <p className="section-note">
+                    These reminders were automatically created when prescription documents were uploaded. 
+                    You can modify the medication details and frequency settings below.
+                  </p>
+                  
+                  <button
+                    className="load-reminders-btn"
+                    onClick={async () => {
+                      try {
+                        const autoReminders = await fetchPatientMedicationReminders(selectedReminderPatient.id);
+                        if (autoReminders.length > 0) {
+                          const reminder = autoReminders[0]; // Get the first auto-created reminder
+                          setEditingReminder(reminder); // Set editing mode
+                          setMedicationReminderForm(prev => ({
+                            ...prev,
+                            medicationName: reminder.medicationName,
+                            dosage: reminder.dosage,
+                            frequency: reminder.frequency,
+                            startDate: reminder.startDate.split('T')[0] + 'T' + reminder.startDate.split('T')[1].substring(0, 5),
+                            endDate: reminder.endDate ? reminder.endDate.split('T')[0] + 'T' + reminder.endDate.split('T')[1].substring(0, 5) : '',
+                            reminderTimes: reminder.reminderTimes
+                          }));
+                          alert('✅ Auto-created reminder loaded for editing!\n\nYou can now modify the medication details. Click "Update Reminder" to save changes.');
+                        } else {
+                          alert('ℹ️ No auto-created reminders found for this patient.\n\nYou can create a new reminder using the form below.');
+                        }
+                      } catch (error) {
+                        console.error('Error loading auto-reminders:', error);
+                        alert('❌ Failed to load auto-created reminders.');
+                      }
+                    }}
+                  >
+                    📥 Load Auto-Created Reminder for Editing
+                  </button>
+                </div>
+
+                <div className="reminder-form">
+                <div className="form-section">
+                  <h4>💊 Medication Details</h4>
+                  <div className="form-row">
+                    <div className="form-group">
+                      <label>
+                        <span>💊</span> Medication Name *
+                      </label>
+                      <input
+                        type="text"
+                        value={medicationReminderForm.medicationName}
+                        onChange={(e) => setMedicationReminderForm(prev => ({
+                          ...prev,
+                          medicationName: e.target.value
+                        }))}
+                        placeholder="e.g., Aspirin, Metformin, Lisinopril"
+                        required
+                      />
+                    </div>
+                    <div className="form-group">
+                      <label>
+                        <span>📏</span> Dosage *
+                      </label>
+                      <input
+                        type="text"
+                        value={medicationReminderForm.dosage}
+                        onChange={(e) => setMedicationReminderForm(prev => ({
+                          ...prev,
+                          dosage: e.target.value
+                        }))}
+                        placeholder="e.g., 500mg, 1 tablet, 2 capsules"
+                        required
+                      />
+                    </div>
+                  </div>
+
+                  <div className="form-row">
+                    <div className="form-group">
+                      <label>
+                        <span>⏰</span> Frequency *
+                      </label>
+                      <select
+                        value={medicationReminderForm.frequency}
+                        onChange={(e) => {
+                          const newFrequency = e.target.value;
+                          setMedicationReminderForm(prev => ({
+                            ...prev,
+                            frequency: newFrequency,
+                            reminderTimes: updateReminderTimes(newFrequency)
+                          }));
+                        }}
+                      >
+                        {availableFrequencies.map(freq => (
+                          <option key={freq.value} value={freq.value}>
+                            {freq.display}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="form-group">
+                      <label>
+                        <span>📅</span> Start Date
+                      </label>
+                      <input
+                        type="datetime-local"
+                        value={medicationReminderForm.startDate}
+                        onChange={(e) => setMedicationReminderForm(prev => ({
+                          ...prev,
+                          startDate: e.target.value
+                        }))}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="form-row">
+                    <div className="form-group">
+                      <label>
+                        <span>⏳</span> End Date (Optional)
+                      </label>
+                      <input
+                        type="datetime-local"
+                        value={medicationReminderForm.endDate}
+                        onChange={(e) => setMedicationReminderForm(prev => ({
+                          ...prev,
+                          endDate: e.target.value
+                        }))}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="form-group">
+                    <label>
+                      <span>⏰</span> Reminder Times
+                    </label>
+                    <div className="reminder-times">
+                      {medicationReminderForm.reminderTimes.map((time, index) => (
+                        <input
+                          key={index}
+                          type="time"
+                          value={time}
+                          onChange={(e) => {
+                            const newTimes = [...medicationReminderForm.reminderTimes];
+                            newTimes[index] = e.target.value;
+                            setMedicationReminderForm(prev => ({
+                              ...prev,
+                              reminderTimes: newTimes
+                            }));
+                          }}
+                        />
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="form-group">
+                    <label>
+                      <span>📝</span> Special Instructions (Optional)
+                    </label>
+                    <textarea
+                      value={medicationReminderForm.specialInstructions}
+                      onChange={(e) => setMedicationReminderForm(prev => ({
+                        ...prev,
+                        specialInstructions: e.target.value
+                      }))}
+                      placeholder="e.g., Take with food, Take on empty stomach"
+                      rows="3"
+                    />
+                  </div>
+
+                  <button
+                    className="create-reminder-btn"
+                    onClick={editingReminder ? () => updateMedicationReminder(editingReminder.id) : createMedicationReminder}
+                    disabled={isCreatingReminder}
+                    style={{
+                      backgroundColor: editingReminder ? '#007bff' : '#28a745',
+                      color: 'white',
+                      padding: '12px 24px',
+                      border: 'none',
+                      borderRadius: '5px',
+                      cursor: isCreatingReminder ? 'not-allowed' : 'pointer',
+                      fontSize: '16px',
+                      fontWeight: 'bold'
+                    }}
+                  >
+                    {isCreatingReminder ? '⏳ Processing...' : (editingReminder ? '🔄 Update Medication Reminder' : '💊 Create Medication Reminder')}
+                  </button>
+                  
+                  {editingReminder && (
+                    <button
+                      className="cancel-edit-btn"
+                      onClick={() => {
+                        setEditingReminder(null);
+                        setMedicationReminderForm({
+                          medicationName: '',
+                          dosage: '',
+                          frequency: 'daily',
+                          startDate: '',
+                          endDate: '',
+                          reminderTimes: ['09:00'],
+                          additionalNotes: ''
+                        });
+                      }}
+                      style={{
+                        backgroundColor: '#6c757d',
+                        color: 'white',
+                        padding: '12px 24px',
+                        border: 'none',
+                        borderRadius: '5px',
+                        cursor: 'pointer',
+                        fontSize: '16px',
+                        fontWeight: 'bold',
+                        marginLeft: '10px'
+                      }}
+                    >
+                      ❌ Cancel Edit
+                    </button>
+                  )}
+                </div>
+              </div>
+              </>
+            )}
+          </div>
+
+          {/* Patient's Current Medication Reminders */}
+          {selectedReminderPatient && (
+            <div className="patient-reminders-section">
+              <h3 className="subsection-title">
+                📋 {selectedReminderPatient.patientName}'s Medication Reminders
+              </h3>
+              
+              {/* Adherence Report */}
+              {adherenceReports[selectedReminderPatient.id] && (
+                <div className="adherence-report">
+                  <h4>📊 Adherence Report (Last 30 Days)</h4>
+                  <div className="adherence-stats">
+                    <div className="adherence-card">
+                      <div className="adherence-value">
+                        {adherenceReports[selectedReminderPatient.id].adherencePercentage}%
+                      </div>
+                      <div className="adherence-label">
+                        Overall Adherence ({adherenceReports[selectedReminderPatient.id].adherenceLevel})
+                      </div>
+                    </div>
+                    <div className="adherence-details">
+                      <p>✅ Doses Taken: {adherenceReports[selectedReminderPatient.id].takenDoses}</p>
+                      <p>❌ Doses Missed: {adherenceReports[selectedReminderPatient.id].missedDoses}</p>
+                      <p>📅 Total Doses: {adherenceReports[selectedReminderPatient.id].totalDoses}</p>
+                      <p>💊 Active Reminders: {adherenceReports[selectedReminderPatient.id].activeReminders}</p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Medication Reminders List */}
+              {isLoadingReminders ? (
+                <div className="loading">🔄 Loading medication reminders...</div>
+              ) : medicationReminders.length > 0 ? (
+                <div className="reminders-list">
+                  {medicationReminders.map(reminder => (
+                    <div key={reminder.id} className="reminder-card">
+                      <div className="reminder-header">
+                        <h4>💊 {reminder.medicationName}</h4>
+                        <span className={`status-badge ${reminder.status.toLowerCase()}`}>
+                          {reminder.status}
+                        </span>
+                      </div>
+                      <div className="reminder-details">
+                        <p><strong>Dosage:</strong> {reminder.dosage}</p>
+                        <p><strong>Frequency:</strong> {reminder.frequency}</p>
+                        <p><strong>Times:</strong> {reminder.reminderTimes.join(', ')}</p>
+                        <p><strong>Adherence:</strong> {reminder.adherencePercentage}% ({reminder.adherenceLevel})</p>
+                        {reminder.nextReminderDue && (
+                          <p><strong>Next Reminder:</strong> {reminder.nextReminderDue}</p>
+                        )}
+                        {reminder.specialInstructions && (
+                          <p><strong>Instructions:</strong> {reminder.specialInstructions}</p>
+                        )}
+                      </div>
+                      <div className="reminder-actions">
+                        <button
+                          onClick={() => markDoseAsTaken(selectedReminderPatient.id, reminder.medicationName)}
+                          style={{
+                            backgroundColor: '#28a745',
+                            color: 'white',
+                            padding: '6px 12px',
+                            border: 'none',
+                            borderRadius: '3px',
+                            marginRight: '5px',
+                            cursor: 'pointer'
+                          }}
+                        >
+                          ✅ Mark Taken
+                        </button>
+                        <button
+                          onClick={() => markDoseAsMissed(selectedReminderPatient.id, reminder.medicationName)}
+                          style={{
+                            backgroundColor: '#dc3545',
+                            color: 'white',
+                            padding: '6px 12px',
+                            border: 'none',
+                            borderRadius: '3px',
+                            cursor: 'pointer'
+                          }}
+                        >
+                          ❌ Mark Missed
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="no-reminders">
+                  📋 No medication reminders found for this patient.
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Admin Welcome View - Default view for admin users only */}
       {userRole === 'admin' && currentAdminView === 'none' && !showPatientsDashboard && (
         <div className="admin-welcome">
@@ -4098,6 +4807,17 @@ function App() {
                 disabled={isLoadingPatients}
               >
                 {isLoadingPatients ? '🔄 Loading...' : '📅 Follow-up Scheduler'}
+              </button>
+              <button 
+                className={`nav-button medication-nav-btn ${currentAdminView === 'medication-reminders' ? 'active' : ''}`}
+                onClick={() => {
+                  setShowPatientsDashboard(false);
+                  setShowFollowUpScheduler(false);
+                  initializeMedicationReminders();
+                }}
+                disabled={isLoadingPatients}
+              >
+                💊 Medication Reminders
               </button>
               <button 
                 className={`nav-button doctors-nav-btn ${currentAdminView === 'doctors' ? 'active' : ''}`}
