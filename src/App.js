@@ -979,6 +979,15 @@ function App() {
       queryText: '',
       urgency: 'normal'
     });
+    
+    // Auto-scroll to doctor communication form
+    setTimeout(() => {
+      const doctorForm = document.querySelector('.doctor-communication-section') || 
+                        document.querySelector('.doctor-communication-centered');
+      if (doctorForm) {
+        doctorForm.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    }, 100);
   };
 
   const submitPatientQuery = async () => {
